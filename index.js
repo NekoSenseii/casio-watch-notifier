@@ -178,7 +178,7 @@ bot.command('status', async (ctx) => {
 📊 Stock Status: ${lastStockStatus}
 ⏰ Last Check: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
 🎯 Monitoring: Casio AE-1200WHL-5AVDF
-⚡ Check Interval: Every 1 minute`;
+⚡ Check Interval: Every 2.5 minute`;
   
   await ctx.reply(message, { parse_mode: 'Markdown' });
 });
@@ -190,8 +190,7 @@ bot.command('check', async (ctx) => {
 });
 
 // Check stock every 1 minute (60 seconds) - UPDATED
-setInterval(checkStock, 60_000);
-
+setInterval(checkStock, 150_000);
 // Start server
 app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
