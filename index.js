@@ -177,7 +177,8 @@ bot.command('status', async (ctx) => {
 ✅ Running for ${uptime} minutes
 📊 Stock Status: ${lastStockStatus}
 ⏰ Last Check: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
-🎯 Monitoring: Casio AE-1200WHL-5AVDF`;
+🎯 Monitoring: Casio AE-1200WHL-5AVDF
+⚡ Check Interval: Every 1 minute`;
   
   await ctx.reply(message, { parse_mode: 'Markdown' });
 });
@@ -188,8 +189,8 @@ bot.command('check', async (ctx) => {
   await ctx.reply(`Stock status: ${lastStockStatus}`);
 });
 
-// Check stock every 5 minutes (300 seconds)
-setInterval(checkStock, 300_000);
+// Check stock every 1 minute (60 seconds) - UPDATED
+setInterval(checkStock, 60_000);
 
 // Start server
 app.listen(PORT, async () => {
@@ -205,13 +206,14 @@ app.listen(PORT, async () => {
 ✅ Now monitoring: AE-1200WHL-5AVDF
 🌐 Store: casiostore.bhawar.com
 ⏰ Started at: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
-🔄 Check interval: Every 5 minutes`, { parse_mode: 'Markdown' });
+🔄 Check interval: **Every 1 minute**`, { parse_mode: 'Markdown' });
   } catch (err) {
     console.error("❌ Startup notification failed:", err.message);
   }
   
   // Start stock checking
   console.log('🔍 Starting stock monitoring for Casio AE-1200WHL-5AVDF...');
+  console.log('⚡ Checking every 1 minute');
   
   // Initial stock check
   setTimeout(checkStock, 5000); // Check after 5 seconds
