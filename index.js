@@ -5,11 +5,26 @@ import { Telegraf } from "telegraf";
 const app = express();
 app.use(express.json());
 
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+// Environment variables
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const WEBHOOK_URL = process.env.WEBHOOK_URL; // e.g., https://casio-watch-notifier.onrender.com
 const PORT = process.env.PORT || 3000;
-const WEBHOOK_URL = process.env.WEBHOOK_URL; // e.g., https://your-render-service.onrender.com/bot
 
-// Basic stock check function
+if (!BOT_TOKEN || !CHAT_ID || !WEBHOOK_URL) {
+  console.error("❌ Missing required environment variables!");
+  process.exit(1);
+}
+
+// Initialize bot
+const bot = new Telegraf(BOT_TOKEN);
+
+// Health check route
+app.get("/", (req, res) => {
+  res.send("Bot server is running!");
+});
+
+// Stock check function
 async function checkStock() {
   try {
     const res = await fetch("https://shop.casio.in/cart/add.js", {
@@ -24,7 +39,7 @@ async function checkStock() {
     } else {
       console.log("✅ Stock available!");
       await bot.telegram.sendMessage(
-        process.env.TELEGRAM_CHAT_ID,
+        CHAT_ID,
         "🎉 Casio AE-1200WHL-5AV is back in stock!"
       );
     }
@@ -34,12 +49,15 @@ async function checkStock() {
 }
 
 // Set up webhook
-bot.telegram.setWebhook(`${WEBHOOK_URL}/bot`);
-app.use(bot.webhookCallback("/bot"));
+const webhookPath = "/bot";
+bot.telegram.setWebhook(`${WEBHOOK_URL}${webhookPath}`);
+app.use(webhookPath, bot.webhookCallback(webhookPath));
 
-// Optional: check stock on a schedule (can also use Render Cron Job)
+// Optional: check stock every 60 seconds (or use Render cron jobs)
 setInterval(checkStock, 60_000);
 
+// Start server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`Webhook URL: ${WEBHOOK_URL}${webhookPath}`);
 });
