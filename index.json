@@ -1,0 +1,36 @@
+import fetch from "node-fetch";
+import { Telegraf
+} from "telegraf";
+
+const bot = new Telegraf(process.env.8355166097:AAGe2xERv0lEP7HMNdguygHSwhpkc9qNjEU;
+
+async function checkStock() {
+  try {
+    const res = await fetch("https://shop.casio.in/cart/add.js",
+        {
+      method: "POST",
+      headers: {
+                "Content-Type": "application/json"
+            },
+      body: JSON.stringify({ quantity: 1, id: 123456789
+            }) // replace with real variant_id
+        });
+    const data = await res.json();
+
+    if (data.status === 422) {
+      console.log("⏳ Still sold out");
+        } else {
+      console.log("✅ Stock available!");
+      await bot.telegram.sendMessage(
+        process.env.1327520482,
+            "🎉 Casio AE-1200WHL-5AV is back in stock!"
+      );
+        }
+    } catch (err) {
+    console.error("❌ Error checking stock", err);
+    }
+}
+
+setInterval(checkStock,
+60_000); // check every 60s
+bot.launch();
