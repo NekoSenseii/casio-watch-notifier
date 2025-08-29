@@ -232,8 +232,8 @@ bot.catch((err, ctx) => {
   console.error('Bot error:', err);
 });
 
-// Schedule stock check every 2.5 minutes
-setInterval(checkStock, 150000);
+// Schedule stock check every 1 minutes
+setInterval(checkStock, 60000);
 
 // Schedule self-ping every 10 minutes
 setInterval(keepAlive, 600000);
