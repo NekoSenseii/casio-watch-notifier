@@ -18,6 +18,7 @@ A Telegram bot that automatically monitors the Casio AE-1200WHL-5AVDF watch stoc
 - ✅ **Self-Healing** - Self-ping mechanism prevents server sleep
 - ✅ **Smart Detection** - Finds "out of stock" vs "add to cart" text
 - ✅ **Polling-Based** - Stable connection without webhook issues
+- ✅ **Security features** - Rate limiting and authentication
 
 ## 4. Tech
 Built With:
@@ -47,6 +48,7 @@ Built With:
     TELEGRAM_BOT_TOKEN=your_bot_token_here
     TELEGRAM_CHAT_ID=your_chat_id_here
     PORT=3000
+    HEALTH_CHECK_KEY
 ## 6. Environment Variables
 
 To run this project, you will need to add the following environment variables:
@@ -56,6 +58,8 @@ To run this project, you will need to add the following environment variables:
 `TELEGRAM_CHAT_ID` - Your Telegram chat ID (use /getUpdates method)
 
 `PORT` - Server port (default: 3000)
+
+`HEALTH_CHECK_KEY` - Your random secert key
 
 **Getting your Bot Token:**
 - Message @BotFather on Telegram
