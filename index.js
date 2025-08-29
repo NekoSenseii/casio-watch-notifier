@@ -5,41 +5,77 @@ import { Telegraf } from "telegraf";
 const app = express();
 app.use(express.json());
 
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+// Environment variables
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const WEBHOOK_URL = process.env.WEBHOOK_URL;
 const PORT = process.env.PORT || 3000;
-const WEBHOOK_URL = process.env.WEBHOOK_URL; // e.g., https://your-render-service.onrender.com/bot
 
-// Basic stock check function
-async function checkStock() {
-  try {
-    const res = await fetch("https://shop.casio.in/cart/add.js", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ quantity: 1, id: 123456789 }) // replace with real variant_id
-    });
-    const data = await res.json();
-
-    if (data.status === 422) {
-      console.log("⏳ Still sold out");
-    } else {
-      console.log("✅ Stock available!");
-      await bot.telegram.sendMessage(
-        process.env.TELEGRAM_CHAT_ID,
-        "🎉 Casio AE-1200WHL-5AV is back in stock!"
-      );
-    }
-  } catch (err) {
-    console.error("❌ Error checking stock", err);
-  }
+// Check for required environment variables
+if (!BOT_TOKEN || !CHAT_ID || !WEBHOOK_URL) {
+  console.error("❌ Missing required environment variables!");
+  process.exit(1);
 }
 
-// Set up webhook
-bot.telegram.setWebhook(`${WEBHOOK_URL}/bot`);
-app.use(bot.webhookCallback("/bot"));
+// Initialize bot
+const bot = new Telegraf(BOT_TOKEN);
 
-// Optional: check stock on a schedule (can also use Render Cron Job)
-setInterval(checkStock, 60_000);
+// Stock status tracking
+let lastStockStatus = 'unknown';
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Health check route
+app.get("/", (req, res) => {
+  res.json({
+    status: "Bot is running!",
+    uptime: process.uptime(),
+    lastCheck: new Date().toISOString(),
+    stockStatus: lastStockStatus
+  });
+});
+
+// ... (your existing checkStock, sendStockNotification, and other functions)
+
+// Self-ping function to prevent Render from sleeping
+function keepAlive() {
+  const url = `${WEBHOOK_URL}`; // Ping your own health endpoint
+
+  fetch(url)
+    .then(response => {
+      console.log(`🏓 Self-ping successful: ${response.status}`);
+    })
+    .catch(err => {
+      console.log(`🏓 Self-ping failed: ${err.message}`);
+    });
+}
+
+// Check stock every 2.5 minutes
+setInterval(checkStock, 150_000);
+
+// Ping every 10 minutes to stay awake
+setInterval(keepAlive, 600_000);
+
+// Start server
+app.listen(PORT, async () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+
+  await setupWebhook();
+
+  // Send startup notification
+  try {
+    await bot.telegram.sendMessage(CHAT_ID, `🤖 **Bot Restarted!**
+
+✅ Now monitoring: AE-1200WHL-5AVDF
+⏰ Restarted at: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+🔄 Check interval: Every 2.5 minutes
+🏓 Self-ping: Every 10 minutes`, { parse_mode: 'Markdown' });
+  } catch (err) {
+    console.error("❌ Startup notification failed:", err.message);
+  }
+
+  // Start services
+  setTimeout(checkStock, 5000);
+  setTimeout(() => {
+    console.log('🏓 Starting self-ping to prevent sleep...');
+    keepAlive();
+  }, 10000);
 });
