@@ -140,7 +140,7 @@ app.listen(PORT, async () => {
     console.log('✅ Bot started successfully with polling');
 
     // Send startup notification
-    await bot.telegram.sendMessage(CHAT_ID, `🤖 **Casio Stock Bot Started!**\n\n✅ Now monitoring: AE-1200WHL-5AVDF\n🌐 Store: casiostore.bhawar.com\n⏰ Started at: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n🔄 Check interval: Every 2.5 minutes\n🏓 Self-ping: Every 10 minutes`, { parse_mode: 'Markdown' });
+    await bot.telegram.sendMessage(CHAT_ID, `🤖 Casio Stock Bot Started!\n\n✅ Now monitoring: AE-1200WHL-5AVDF\n🌐 Store: casiostore.bhawar.com\n⏰ Started at: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n🔄 Check interval: Every 2.5 minutes\n🏓 Self-ping: Every 10 minutes`);
 
   } catch (error) {
     console.error('❌ Failed to start bot:', error.message);
