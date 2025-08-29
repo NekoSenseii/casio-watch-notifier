@@ -29,20 +29,34 @@ const bot = new Telegraf(BOT_TOKEN);
 let lastStockStatus = 'unknown';
 let lastHealthCheck = 0;
 
+// Simple ping endpoint for testing
+app.get("/ping", (req, res) => {
+  res.json({
+    message: "pong",
+    timestamp: new Date().toISOString(),
+    status: "healthy"
+  });
+});
+
 // Health check route with authentication and rate limiting
 app.get("/", (req, res) => {
+  console.log('Health check accessed with key:', req.query.key ? 'provided' : 'missing');
+
   // Simple rate limiting: max 1 request per 30 seconds
   const now = Date.now();
   if (now - lastHealthCheck < 30000) {
+    console.log('Rate limit hit');
     return res.status(429).json({ error: "Too many requests" });
   }
   lastHealthCheck = now;
 
   const healthKey = req.query.key;
   if (healthKey !== HEALTH_CHECK_KEY) {
+    console.log('Wrong health key provided');
     return res.status(401).json({ error: "Unauthorized" });
   }
 
+  console.log('Health check successful');
   res.json({
     status: "Bot is running!",
     uptime: Math.floor(process.uptime() / 60), // Only show minutes
@@ -132,10 +146,10 @@ function checkStockFromHTML(html) {
   return false;
 }
 
-// Notify Telegram channel/group
+// Notify Telegram channel/group - FIXED Markdown
 async function sendStockNotification() {
   try {
-    const message = `🎉 **STOCK ALERT!**\n\n✅ Casio AE-1200WHL-5AVDF is back in stock!\n\n🛒 **Buy now:** [View Product](https://casiostore.bhawar.com/products/casio-youth-ae-1200whl-5avdf-black-digital-dial-brown-leather-band-d383)\n\n💰 **Price:** Check website for current price\n⏰ **Checked at:** ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n\n⚡ **Hurry! Limited stock available**`;
+    const message = `🎉 *STOCK ALERT!*\n\n✅ Casio AE-1200WHL-5AVDF is back in stock!\n\n🛒 *Buy now:* [View Product](https://casiostore.bhawar.com/products/casio-youth-ae-1200whl-5avdf-black-digital-dial-brown-leather-band-d383)\n\n💰 *Price:* Check website for current price\n⏰ *Checked at:* ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n\n⚡ *Hurry! Limited stock available*`;
 
     await bot.telegram.sendMessage(CHAT_ID, message, {
       parse_mode: 'Markdown',
@@ -160,21 +174,42 @@ function keepAlive() {
   const healthUrl = `${pingUrl}?key=${HEALTH_CHECK_KEY}`;
 
   fetch(healthUrl)
-    .then(res => console.log(`🏓 Self-ping successful: ${res.status}`))
+    .then(res => {
+      if (res.ok) {
+        console.log(`🏓 Self-ping successful: ${res.status}`);
+      } else {
+        console.log(`🏓 Self-ping failed with status: ${res.status}`);
+      }
+    })
     .catch(err => console.log(`🏓 Self-ping failed: ${err.message}`));
 }
 
-// Bot commands
+// Bot commands - FIXED Markdown formatting
 bot.command('status', async ctx => {
-  const uptime = Math.floor(process.uptime() / 60);
-  const message = `🤖 **Bot Status**\n\n✅ Running for ${uptime} minutes\n📊 Stock Status: ${lastStockStatus}\n⏰ Last Check: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n🎯 Monitoring: Casio AE-1200WHL-5AVDF\n⚡ Check Interval: Every 2.5 minutes`;
-  await ctx.reply(message, { parse_mode: 'Markdown' });
+  try {
+    const uptime = Math.floor(process.uptime() / 60);
+    const message = `🤖 *Bot Status*\n\n✅ Running for ${uptime} minutes\n📊 Stock Status: ${lastStockStatus}\n⏰ Last Check: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n🎯 Monitoring: Casio AE-1200WHL-5AVDF\n⚡ Check Interval: Every 2.5 minutes`;
+    await ctx.reply(message, { parse_mode: 'Markdown' });
+  } catch (error) {
+    console.error('Status command error:', error);
+    await ctx.reply('❌ Error getting status');
+  }
 });
 
 bot.command('check', async ctx => {
-  await ctx.reply('🔍 Checking stock now...');
-  await checkStock();
-  await ctx.reply(`Stock status: ${lastStockStatus}`);
+  try {
+    await ctx.reply('🔍 Checking stock now...');
+    await checkStock();
+    await ctx.reply(`Stock status: ${lastStockStatus}`);
+  } catch (error) {
+    console.error('Check command error:', error);
+    await ctx.reply('❌ Error checking stock');
+  }
+});
+
+// Global error handler for bot
+bot.catch((err, ctx) => {
+  console.error('Bot error:', err);
 });
 
 // Schedule stock check every 2.5 minutes
@@ -192,8 +227,10 @@ app.listen(PORT, async () => {
     await bot.launch();
     console.log('✅ Bot started successfully with polling');
 
-    // Send startup notification
-    await bot.telegram.sendMessage(CHAT_ID, `🤖 Casio Stock Bot Started!\n\n✅ Now monitoring: AE-1200WHL-5AVDF\n🌐 Store: casiostore.bhawar.com\n⏰ Started at: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n🔄 Check interval: Every 2.5 minutes\n🏓 Self-ping: Every 10 minutes`);
+    // Send startup notification - FIXED Markdown
+    const startupMessage = `🤖 Casio Stock Bot Started!\n\n✅ Now monitoring: AE-1200WHL-5AVDF\n🌐 Store: casiostore.bhawar.com\n⏰ Started at: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n🔄 Check interval: Every 2.5 minutes\n🏓 Self-ping: Every 10 minutes`;
+
+    await bot.telegram.sendMessage(CHAT_ID, startupMessage);
   } catch (error) {
     console.error('❌ Failed to start bot:', error.message);
   }
