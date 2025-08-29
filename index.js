@@ -208,25 +208,6 @@ bot.command('check', async ctx => {
   }
 });
 
-// ADD THIS NEW TEST COMMAND:
-bot.command('test', async ctx => {
-  try {
-    await ctx.reply('🧪 Testing stock notification...');
-
-    // Temporarily set stock as available to trigger notification
-    const previousStatus = lastStockStatus;
-    lastStockStatus = 'sold_out'; // Reset to trigger the notification
-
-    // Simulate stock becoming available
-    lastStockStatus = 'available';
-    await sendStockNotification();
-
-    await ctx.reply('✅ Test notification sent! Check if you received the stock alert.');
-  } catch (error) {
-    console.error('Test command error:', error);
-    await ctx.reply('❌ Error sending test notification');
-  }
-});
 
 // Global error handler for bot
 bot.catch((err, ctx) => {
