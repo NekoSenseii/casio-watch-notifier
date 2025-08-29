@@ -5,14 +5,13 @@ import { Telegraf } from "telegraf";
 const app = express();
 app.use(express.json());
 
-// Environment variables
+// Environment variables  
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-const WEBHOOK_URL = process.env.WEBHOOK_URL;
 const PORT = process.env.PORT || 3000;
 
 // Verify environment variables
-if (!BOT_TOKEN || !CHAT_ID || !WEBHOOK_URL) {
+if (!BOT_TOKEN || !CHAT_ID) {
   console.error("❌ Missing required environment variables!");
   process.exit(1);
 }
@@ -107,28 +106,10 @@ async function sendStockNotification() {
 
 // Keep the app alive
 function keepAlive() {
-  fetch(WEBHOOK_URL)
+  fetch(`https://casio-notifier.onrender.com`)
     .then(res => console.log(`🏓 Self-ping successful: ${res.status}`))
     .catch(err => console.log(`🏓 Self-ping failed: ${err.message}`));
 }
-
-// Webhook path
-const webhookPath = '/bot';
-
-// Setup webhook
-async function setupWebhook() {
-  try {
-    await bot.telegram.deleteWebhook({ drop_pending_updates: true });
-    console.log('🗑️ Old webhook deleted');
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    await bot.telegram.setWebhook(`${WEBHOOK_URL}${webhookPath}`);
-    console.log(`✅ Webhook set up: ${WEBHOOK_URL}${webhookPath}`);
-  } catch (err) {
-    console.error('❌ Webhook setup failed:', err.message);
-  }
-}
-
-app.use(webhookPath, bot.webhookCallback(webhookPath));
 
 // Bot commands
 bot.command('status', async ctx => {
@@ -149,25 +130,33 @@ setInterval(checkStock, 150000);
 // Schedule self-ping every 10 minutes
 setInterval(keepAlive, 600000);
 
-// Start server
+// Start Express server and bot
 app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📡 Webhook URL: ${WEBHOOK_URL}${webhookPath}`);
-
-  await setupWebhook();
+  console.log(`🔄 Starting bot with polling...`);
 
   try {
+    await bot.launch();
+    console.log('✅ Bot started successfully with polling');
+
+    // Send startup notification
     await bot.telegram.sendMessage(CHAT_ID, `🤖 **Casio Stock Bot Started!**\n\n✅ Now monitoring: AE-1200WHL-5AVDF\n🌐 Store: casiostore.bhawar.com\n⏰ Started at: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n🔄 Check interval: Every 2.5 minutes\n🏓 Self-ping: Every 10 minutes`, { parse_mode: 'Markdown' });
-  } catch (err) {
-    console.error('❌ Startup notification failed:', err.message);
+
+  } catch (error) {
+    console.error('❌ Failed to start bot:', error.message);
   }
 
   console.log('🔍 Starting stock monitoring for Casio AE-1200WHL-5AVDF...');
   console.log('⚡ Checking every 2.5 minutes');
 
-  setTimeout(checkStock, 5000); // Initial stock check after 5 seconds
+  // Initial stock check and self-ping
+  setTimeout(checkStock, 5000);
   setTimeout(() => {
     console.log('🏓 Starting self-ping to prevent sleep...');
     keepAlive();
   }, 10000);
 });
+
+// Graceful shutdown to prevent redeploy issues
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
