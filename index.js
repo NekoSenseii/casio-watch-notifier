@@ -170,9 +170,17 @@ function keepAlive() {
 // Set up webhook
 const webhookPath = "/bot";
 
-// Setup webhook with error handling
+// Setup webhook with error handling - FIXED VERSION
 async function setupWebhook() {
   try {
+    // Delete old webhook first
+    await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+    console.log('🗑️ Old webhook deleted');
+
+    // Wait 2 seconds before setting new webhook
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Set new webhook
     await bot.telegram.setWebhook(`${WEBHOOK_URL}${webhookPath}`);
     console.log(`✅ Webhook set up: ${WEBHOOK_URL}${webhookPath}`);
   } catch (err) {
