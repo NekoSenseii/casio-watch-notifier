@@ -167,7 +167,7 @@ You are free to:
 - Place warranty
 
 ## 12. Authors
-- [@NekoSenseii](https://https://github.com/NekoSenseii) - Initial work
+- [@NekoSenseii](https://github.com/NekoSenseii) - Initial work
 
 See also the list of [contributors](https://github.com/yourusername/casio-watch-notifier/contributors) who participated in this project.
 
