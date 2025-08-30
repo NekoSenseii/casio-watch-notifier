@@ -11,7 +11,7 @@ A Telegram bot that automatically monitors the Casio AE-1200WHL-5AVDF watch stoc
 ![Render](https://img.shields.io/badge/Render-%46E3B7.svg?style=for-the-badge&logo=render&logoColor=white)
 
 ## 3. Features
-- ✅ **24/7 Monitoring** - Checks stock every 2.5 minutes automatically
+- ✅ **24/7 Monitoring** - Checks stock every 1 minutes automatically
 - ✅ **Instant Alerts** - Telegram notifications when watch is back in stock  
 - ✅ **Bot Commands** - `/status` and `/check` commands
 - ✅ **Free Hosting** - Runs on Render's free tier
