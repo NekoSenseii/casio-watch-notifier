@@ -44,15 +44,14 @@ Built With:
 
 -> **Set up environment variables**
    
-   - Copy `.env.example` to `.env` and fill in your values:
-        | Variable | Description | Example |
-|----------|-------------|---------|
-| `TELEGRAM_BOT_TOKEN` | Your Telegram bot token | `123456:ABC-DEF...` |
-| `TELEGRAM_CHAT_ID` | Group chat ID | `-1001234567890` |
-| `TELEGRAM_ADMIN_USER_ID` | Admin user ID | `123456789` |
-| `TELEGRAM_TEST_CHAT_ID` | Personal test chat ID | `987654321` |
-| `HEALTH_CHECK_KEY` | Random secret key | `my-secret-key-123` |
-| `PORT` | Server port | `3000` |
+Create a `.env` file in the root directory (copy from `.env.example`) and fill in your values:
+
+- `TELEGRAM_BOT_TOKEN` → Your Telegram bot token  
+- `TELEGRAM_CHAT_ID` → Your group chat ID  
+- `TELEGRAM_ADMIN_USER_ID` → Your admin user ID  
+- `TELEGRAM_TEST_CHAT_ID` → Your personal chat ID (for testing)  
+- `HEALTH_CHECK_KEY` → A random secret key for health checks  
+- `PORT` → Port number (default: `3000`)
 
 ⚠️ **Never commit your `.env` file to version control!**
 
