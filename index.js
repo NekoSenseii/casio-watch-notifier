@@ -8,8 +8,10 @@ app.use(express.json());
 // Environment variables  
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const TEST_CHAT_ID = process.env.TELEGRAM_TEST_CHAT_ID;
 const PORT = process.env.PORT || 3000;
 const HEALTH_CHECK_KEY = process.env.HEALTH_CHECK_KEY;
+const ADMIN_USER_ID = parseInt(process.env.TELEGRAM_ADMIN_USER_ID) || 1327520482;
 
 // Verify environment variables
 if (!BOT_TOKEN || !CHAT_ID) {
@@ -161,6 +163,16 @@ async function sendStockNotification() {
   }
 }
 
+// Test notification function for personal testing
+async function sendTestNotification(chatId) {
+  const message = `🧪 <b>DEV TEST ALERT</b>\n\n✅ This is a test stock notification\n\n🛒 <b>Product:</b> Casio AE-1200WHL-5AVDF\n⏰ <b>Test Time:</b> ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n🔧 <b>Status:</b> Development Testing Mode\n\n⚠️ <i>This is not a real stock alert</i>`;
+
+  await bot.telegram.sendMessage(chatId, message, {
+    parse_mode: 'HTML',
+    disable_web_page_preview: true
+  });
+}
+
 // Keep the app alive using Render's environment variable
 function keepAlive() {
   // Use Render's automatic environment variable or skip if running locally
@@ -188,12 +200,13 @@ function keepAlive() {
 bot.command('status', async ctx => {
   try {
     const uptime = Math.floor(process.uptime() / 60);
-    const message = `🤖 <b>Bot Status</b>\n\n✅ Running for ${uptime} minutes\n📊 Stock Status: ${lastStockStatus}\n⏰ Last Check: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n🎯 Monitoring: Casio AE-1200WHL-5AVDF\n⚡ Check Interval: Every 2.5 minutes`;
+    const message = `🤖 <b>Bot Status</b>\n\n✅ Running for ${uptime} minutes\n📊 Stock Status: ${lastStockStatus}\n⏰ Last Check: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n🎯 Monitoring: Casio AE-1200WHL-5AVDF\n⚡ Check Interval: Every 1 minute`;
     await ctx.reply(message, { parse_mode: 'HTML' });
   } catch (error) {
     console.error('Status command error:', error);
     // Fallback to plain text if HTML fails
-    await ctx.reply(`🤖 Bot Status\n\n✅ Running for ${uptime} minutes\n📊 Stock Status: ${lastStockStatus}\n⏰ Last Check: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n🎯 Monitoring: Casio AE-1200WHL-5AVDF\n⚡ Check Interval: Every 2.5 minutes`);
+    const uptime = Math.floor(process.uptime() / 60);
+    await ctx.reply(`🤖 Bot Status\n\n✅ Running for ${uptime} minutes\n📊 Stock Status: ${lastStockStatus}\n⏰ Last Check: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n🎯 Monitoring: Casio AE-1200WHL-5AVDF\n⚡ Check Interval: Every 1 minute`);
   }
 });
 
@@ -207,7 +220,8 @@ bot.command('check', async ctx => {
     await ctx.reply('❌ Error checking stock');
   }
 });
-// ADD THIS NEW TEST COMMAND:
+
+// Regular test command for group
 bot.command('test', async ctx => {
   try {
     await ctx.reply('🧪 Testing stock notification...');
@@ -227,12 +241,47 @@ bot.command('test', async ctx => {
   }
 });
 
+// Personal test command - only works in private chat with admin
+bot.command('devtest', async ctx => {
+  // Only works if sent by admin in personal chat
+  if (ctx.from.id === ADMIN_USER_ID && ctx.chat.type === 'private') {
+    try {
+      await ctx.reply('🧪 Dev Test: Sending stock notification...');
+
+      // Send test notification to your personal chat
+      await sendTestNotification(ctx.chat.id);
+
+      await ctx.reply('✅ Test notification sent!');
+    } catch (error) {
+      await ctx.reply('❌ Test failed: ' + error.message);
+    }
+  } else {
+    await ctx.reply('🚫 Dev commands only work in private admin chat');
+  }
+});
+
+// Admin-only status command
+bot.command('adminstatus', async ctx => {
+  if (ctx.from.id === ADMIN_USER_ID) {
+    const message = `🔧 <b>Admin Status</b>\n\n📊 <b>Bot Uptime:</b> ${Math.floor(process.uptime() / 60)} minutes\n🏠 <b>Main Group:</b> ${CHAT_ID}\n🧪 <b>Test Chat:</b> ${TEST_CHAT_ID || 'Personal chat'}\n⚡ <b>Current Chat:</b> ${ctx.chat.id}\n📈 <b>Stock Status:</b> ${lastStockStatus}\n⏱️ <b>Check Interval:</b> 1 minute`;
+    await ctx.reply(message, { parse_mode: 'HTML' });
+  }
+});
+
+// Configuration check command
+bot.command('config', async ctx => {
+  if (ctx.from.id === ADMIN_USER_ID) {
+    await ctx.reply(`🔧 <b>Bot Configuration</b>\n\nCheck Interval: 1 minute\nMain Group: ${CHAT_ID}\nTest Chat: ${TEST_CHAT_ID || 'Personal chat'}\nAdmin ID: ${ADMIN_USER_ID}`,
+      { parse_mode: 'HTML' });
+  }
+});
+
 // Global error handler for bot
 bot.catch((err, ctx) => {
   console.error('Bot error:', err);
 });
 
-// Schedule stock check every 1 minutes
+// Schedule stock check every 1 minute (60,000 milliseconds)
 setInterval(checkStock, 60000);
 
 // Schedule self-ping every 10 minutes
@@ -248,7 +297,7 @@ app.listen(PORT, async () => {
     console.log('✅ Bot started successfully with polling');
 
     // Send startup notification - FIXED with HTML formatting
-    const startupMessage = `🤖 <b>Casio Stock Bot Started!</b>\n\n✅ Now monitoring: AE-1200WHL-5AVDF\n🌐 Store: casiostore.bhawar.com\n⏰ Started at: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n🔄 Check interval: Every 2.5 minutes\n🏓 Self-ping: Every 10 minutes`;
+    const startupMessage = `🤖 <b>Casio Stock Bot Started!</b>\n\n✅ Now monitoring: AE-1200WHL-5AVDF\n🌐 Store: casiostore.bhawar.com\n⏰ Started at: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n🔄 Check interval: Every 1 minute\n🏓 Self-ping: Every 10 minutes`;
 
     await bot.telegram.sendMessage(CHAT_ID, startupMessage, { parse_mode: 'HTML' });
   } catch (error) {
@@ -256,7 +305,7 @@ app.listen(PORT, async () => {
   }
 
   console.log('🔍 Starting stock monitoring for Casio AE-1200WHL-5AVDF...');
-  console.log('⚡ Checking every 1 minutes');
+  console.log('⚡ Checking every 1 minute');
 
   // Initial stock check and self-ping
   setTimeout(checkStock, 5000);
