@@ -45,8 +45,8 @@ Built With:
 -> **Set up environment variables**
    
    - Copy `.env.example` to `.env` and fill in your values:
-        TELEGRAM_BOT_TOKEN=your_bot_token_here
-        TELEGRAM_CHAT_ID=your_group_chat_id_here
+        -> TELEGRAM_BOT_TOKEN=your_bot_token_here
+        -> TELEGRAM_CHAT_ID=your_group_chat_id_here
         TELEGRAM_ADMIN_USER_ID=your_admin_user_id_here
         TELEGRAM_TEST_CHAT_ID=your_personal_chat_id_here
         HEALTH_CHECK_KEY=your_random_secret_key_here
