@@ -45,12 +45,17 @@ Built With:
 -> **Set up environment variables**
    
    - Copy `.env.example` to `.env` and fill in your values:
-        -> TELEGRAM_BOT_TOKEN=your_bot_token_here
-        -> TELEGRAM_CHAT_ID=your_group_chat_id_here
-        TELEGRAM_ADMIN_USER_ID=your_admin_user_id_here
-        TELEGRAM_TEST_CHAT_ID=your_personal_chat_id_here
-        HEALTH_CHECK_KEY=your_random_secret_key_here
-        PORT=3000
+        | Variable | Description | Example |
+|----------|-------------|---------|
+| `TELEGRAM_BOT_TOKEN` | Your Telegram bot token | `123456:ABC-DEF...` |
+| `TELEGRAM_CHAT_ID` | Group chat ID | `-1001234567890` |
+| `TELEGRAM_ADMIN_USER_ID` | Admin user ID | `123456789` |
+| `TELEGRAM_TEST_CHAT_ID` | Personal test chat ID | `987654321` |
+| `HEALTH_CHECK_KEY` | Random secret key | `my-secret-key-123` |
+| `PORT` | Server port | `3000` |
+
+⚠️ **Never commit your `.env` file to version control!**
+
 ## 6. Environment Variables
 
 To run this project, you will need to add the following environment variables:
