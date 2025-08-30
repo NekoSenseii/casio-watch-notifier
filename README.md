@@ -11,7 +11,7 @@ A Telegram bot that automatically monitors the Casio AE-1200WHL-5AVDF watch stoc
 ![Render](https://img.shields.io/badge/Render-%46E3B7.svg?style=for-the-badge&logo=render&logoColor=white)
 
 ## 3. Features
-- ✅ **24/7 Monitoring** - Checks stock every 1 minutes automatically
+- ✅ **24/7 Monitoring** - Checks stock every 1 minute automatically
 - ✅ **Instant Alerts** - Telegram notifications when watch is back in stock  
 - ✅ **Bot Commands** - `/status` and `/check` commands
 - ✅ **Free Hosting** - Runs on Render's free tier
@@ -46,30 +46,34 @@ Built With:
    
    - Copy `.env.example` to `.env` and fill in your values:
     TELEGRAM_BOT_TOKEN=your_bot_token_here
-    TELEGRAM_CHAT_ID=your_chat_id_here
+    TELEGRAM_CHAT_ID=your_group_chat_id_here
+    TELEGRAM_ADMIN_USER_ID=your_admin_user_id_here
+    TELEGRAM_TEST_CHAT_ID=your_personal_chat_id_here
+    HEALTH_CHECK_KEY=your_random_secret_key_here
     PORT=3000
-    HEALTH_CHECK_KEY
 ## 6. Environment Variables
 
 To run this project, you will need to add the following environment variables:
 
-`TELEGRAM_BOT_TOKEN` - Get from @BotFather on Telegram
+**Required:**
+- `TELEGRAM_BOT_TOKEN` - Get from @BotFather on Telegram
+- `TELEGRAM_CHAT_ID` - Your Telegram group chat ID  
+- `TELEGRAM_ADMIN_USER_ID` - Your personal Telegram user ID
+- `HEALTH_CHECK_KEY` - Your random secret key
 
-`TELEGRAM_CHAT_ID` - Your Telegram chat ID (use /getUpdates method)
-
-`PORT` - Server port (default: 3000)
-
-`HEALTH_CHECK_KEY` - Your random secert key
+**Optional:**
+- `TELEGRAM_TEST_CHAT_ID` - For personal testing (can be same as admin ID)
+- `PORT` - Server port (default: 3000)
 
 **Getting your Bot Token:**
 - Message @BotFather on Telegram
 - Use `/newbot` command
 - Follow instructions and copy the token
 
-**Getting your Chat ID:**
-- Start a chat with your bot
-- Visit: `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates`
-- Copy the `chat.id` from the response
+**Getting your Chat IDs:**
+- Group ID: Add @RawDataBot to your group, it will show the group ID
+- Personal ID: Message @RawDataBot privately to get your user ID
+
 
 ## 7. Run Locally
 #### Install dependencies
@@ -123,6 +127,26 @@ Once deployed, use these commands in Telegram:
     /check
 
 *Immediately checks current stock status*
+
+**Admin Commands (Private Chat Only)**
+    
+    /devtest
+    
+*Sends test notification to admin's private chat*
+
+**Admin Status:**
+
+    /adminstatus
+
+*Detailed bot status with configuration info*
+
+**Configuration View:**
+
+    /config
+
+*View current bot configuration and settings*
+
+⚠️ **Note**: Admin commands only work in private chat with the bot owner and are hidden from regular group users.
 
 ### Automatic Notifications
 
