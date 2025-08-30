@@ -33,13 +33,7 @@ let lastHealthCheck = 0;
 
 // Dynamic command menu setup
 async function setUserCommands() {
-  const publicCommands = [
-    { command: 'status', description: 'Check bot status and uptime' },
-    { command: 'check', description: 'Manually check stock availability' },
-    { command: 'test', description: 'Send a test stock notification' }
-  ];
-
-  const adminCommands = [
+  const allCommands = [
     { command: 'status', description: 'Check bot status and uptime' },
     { command: 'check', description: 'Manually check stock availability' },
     { command: 'test', description: 'Send a test stock notification' },
@@ -49,15 +43,9 @@ async function setUserCommands() {
   ];
 
   try {
-    // Set public commands as default for all users
-    await bot.telegram.setMyCommands(publicCommands);
-    console.log('✅ Public commands set successfully');
-
-    // Set admin commands for admin's private chat
-    await bot.telegram.setMyCommands(adminCommands, {
-      scope: { type: 'chat', chat_id: ADMIN_USER_ID }
-    });
-    console.log('✅ Admin commands set successfully');
+    // Set all commands globally - admin commands will be hidden by access control
+    await bot.telegram.setMyCommands(allCommands);
+    console.log('✅ All commands set successfully');
   } catch (error) {
     console.error('❌ Error setting commands:', error.message);
   }
