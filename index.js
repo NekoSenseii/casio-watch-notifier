@@ -256,7 +256,7 @@ app.listen(PORT, async () => {
   }
 
   console.log('🔍 Starting stock monitoring for Casio AE-1200WHL-5AVDF...');
-  console.log('⚡ Checking every 2.5 minutes');
+  console.log('⚡ Checking every 1 minutes');
 
   // Initial stock check and self-ping
   setTimeout(checkStock, 5000);
