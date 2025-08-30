@@ -31,6 +31,38 @@ const bot = new Telegraf(BOT_TOKEN);
 let lastStockStatus = 'unknown';
 let lastHealthCheck = 0;
 
+// Dynamic command menu setup
+async function setUserCommands() {
+  const publicCommands = [
+    { command: 'status', description: 'Check bot status and uptime' },
+    { command: 'check', description: 'Manually check stock availability' },
+    { command: 'test', description: 'Send a test stock notification' }
+  ];
+
+  const adminCommands = [
+    { command: 'status', description: 'Check bot status and uptime' },
+    { command: 'check', description: 'Manually check stock availability' },
+    { command: 'test', description: 'Send a test stock notification' },
+    { command: 'devtest', description: 'Dev testing (admin only)' },
+    { command: 'adminstatus', description: 'Detailed admin status' },
+    { command: 'config', description: 'View bot configuration' }
+  ];
+
+  try {
+    // Set public commands as default for all users
+    await bot.telegram.setMyCommands(publicCommands);
+    console.log('✅ Public commands set successfully');
+
+    // Set admin commands for admin's private chat
+    await bot.telegram.setMyCommands(adminCommands, {
+      scope: { type: 'chat', chat_id: ADMIN_USER_ID }
+    });
+    console.log('✅ Admin commands set successfully');
+  } catch (error) {
+    console.error('❌ Error setting commands:', error.message);
+  }
+}
+
 // Simple ping endpoint for testing
 app.get("/ping", (req, res) => {
   res.json({
@@ -241,7 +273,7 @@ bot.command('test', async ctx => {
   }
 });
 
-// Personal test command - only works in private chat with admin
+// Enhanced Personal test command - only works in private chat with admin
 bot.command('devtest', async ctx => {
   // Only works if sent by admin in personal chat
   if (ctx.from.id === ADMIN_USER_ID && ctx.chat.type === 'private') {
@@ -255,24 +287,37 @@ bot.command('devtest', async ctx => {
     } catch (error) {
       await ctx.reply('❌ Test failed: ' + error.message);
     }
+  } else if (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup') {
+    // Silently ignore in groups to hide the command
+    return;
   } else {
-    await ctx.reply('🚫 Dev commands only work in private admin chat');
+    await ctx.reply('🚫 This command is not available to you');
   }
 });
 
-// Admin-only status command
+// Enhanced Admin-only status command
 bot.command('adminstatus', async ctx => {
   if (ctx.from.id === ADMIN_USER_ID) {
     const message = `🔧 <b>Admin Status</b>\n\n📊 <b>Bot Uptime:</b> ${Math.floor(process.uptime() / 60)} minutes\n🏠 <b>Main Group:</b> ${CHAT_ID}\n🧪 <b>Test Chat:</b> ${TEST_CHAT_ID || 'Personal chat'}\n⚡ <b>Current Chat:</b> ${ctx.chat.id}\n📈 <b>Stock Status:</b> ${lastStockStatus}\n⏱️ <b>Check Interval:</b> 1 minute`;
     await ctx.reply(message, { parse_mode: 'HTML' });
+  } else if (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup') {
+    // Silently ignore in groups to hide the command
+    return;
+  } else {
+    await ctx.reply('🚫 This command is not available to you');
   }
 });
 
-// Configuration check command
+// Enhanced Configuration check command
 bot.command('config', async ctx => {
   if (ctx.from.id === ADMIN_USER_ID) {
     await ctx.reply(`🔧 <b>Bot Configuration</b>\n\nCheck Interval: 1 minute\nMain Group: ${CHAT_ID}\nTest Chat: ${TEST_CHAT_ID || 'Personal chat'}\nAdmin ID: ${ADMIN_USER_ID}`,
       { parse_mode: 'HTML' });
+  } else if (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup') {
+    // Silently ignore in groups to hide the command
+    return;
+  } else {
+    await ctx.reply('🚫 This command is not available to you');
   }
 });
 
@@ -295,6 +340,9 @@ app.listen(PORT, async () => {
   try {
     await bot.launch();
     console.log('✅ Bot started successfully with polling');
+
+    // Set up dynamic command menus
+    await setUserCommands();
 
     // Send startup notification - FIXED with HTML formatting
     const startupMessage = `🤖 <b>Casio Stock Bot Started!</b>\n\n✅ Now monitoring: AE-1200WHL-5AVDF\n🌐 Store: casiostore.bhawar.com\n⏰ Started at: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n🔄 Check interval: Every 1 minute\n🏓 Self-ping: Every 10 minutes`;
