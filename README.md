@@ -35,7 +35,7 @@ Built With:
 - GitHub account (for deployment)
 #### Local Setup
 -> **Clone the repository**
-- git clone https://github.com/yourusername/casio-watch-notifier.git
+- git clone https://github.com/NekoSenseii/casio-watch-notifier.git
 - cd casio-watch-notifier
 
 -> **Install dependencies**
