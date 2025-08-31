@@ -87,7 +87,7 @@ To run this project, you will need to add the following environment variables:
     cp .env.example .env
 
 #### Edit .env with your credentials
-        nano .env
+    nano .env
 
 #### Start the application
     npm start
