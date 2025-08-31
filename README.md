@@ -190,7 +190,7 @@ Contributions are what make the open source community amazing! Any contributions
 
 ## 11. License
 
-Distributed under the MIT License. See [MIT License](./LICENSE) for more information.
+This project is licensed under the [GNU AGPL v3](./LICENSE).
 
 You are free to:
 - Use commercially
