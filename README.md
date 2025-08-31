@@ -190,13 +190,12 @@ Contributions are what make the open source community amazing! Any contributions
 
 ## 11. License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+Distributed under the MIT License. See [MIT License](./LICENSE) for more information.
 
 You are free to:
 - Use commercially
 - Modify  
 - Distribute
-- Place warranty
 
 ## 12. Authors
 - [@NekoSenseii](https://github.com/NekoSenseii) - Initial work
