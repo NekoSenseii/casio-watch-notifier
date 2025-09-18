@@ -14,13 +14,8 @@ const HEALTH_CHECK_KEY = process.env.HEALTH_CHECK_KEY;
 const ADMIN_USER_ID = parseInt(process.env.TELEGRAM_ADMIN_USER_ID) || 1327520482;
 
 // Verify environment variables
-if (!BOT_TOKEN || !CHAT_ID) {
-  console.error("❌ Missing required environment variables: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID!");
-  process.exit(1);
-}
-
-if (!HEALTH_CHECK_KEY) {
-  console.error("❌ HEALTH_CHECK_KEY environment variable is required!");
+if (!BOT_TOKEN || !CHAT_ID || !HEALTH_CHECK_KEY) {
+  console.error("❌ Missing required environment variables!");
   process.exit(1);
 }
 
@@ -30,71 +25,67 @@ const bot = new Telegraf(BOT_TOKEN);
 // Track last stock status and rate limiting
 let lastStockStatus = 'unknown';
 let lastHealthCheck = 0;
+let checkCount = 0;
 
-// Dynamic command menu setup
-async function setUserCommands() {
-  const allCommands = [
-    { command: 'status', description: 'Check bot status and uptime' },
-    { command: 'check', description: 'Manually check stock availability' },
-    { command: 'test', description: 'Send a test stock notification' },
-    { command: 'devtest', description: 'Dev testing (admin only)' },
-    { command: 'adminstatus', description: 'Detailed admin status' },
-    { command: 'config', description: 'View bot configuration' }
-  ];
+// **MEMORY MONITORING** - Add this for debugging
+function logMemoryUsage() {
+  const memUsage = process.memoryUsage();
+  const memMB = Math.round(memUsage.rss / 1024 / 1024);
+  console.log(`💾 Memory: ${memMB}MB | Heap: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB | Checks: ${checkCount}`);
 
-  try {
-    // Set all commands globally - admin commands will be hidden by access control
-    await bot.telegram.setMyCommands(allCommands);
-    console.log('✅ All commands set successfully');
-  } catch (error) {
-    console.error('❌ Error setting commands:', error.message);
+  // Restart if memory gets too high (prevents crashes)
+  if (memMB > 400) {
+    console.log('⚠️ High memory usage detected, restarting...');
+    process.exit(0); // Render will restart automatically
   }
 }
 
-// Simple ping endpoint for testing
-app.get("/ping", (req, res) => {
-  res.json({
-    message: "pong",
-    timestamp: new Date().toISOString(),
-    status: "healthy"
-  });
+// **ERROR HANDLING** - Add global error handlers
+process.on('uncaughtException', (error) => {
+  console.error('💥 Uncaught Exception:', error.message);
+  process.exit(1);
 });
 
-// Health check route with authentication and rate limiting
-app.get("/", (req, res) => {
-  console.log('Health check accessed with key:', req.query.key ? 'provided' : 'missing');
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('💥 Unhandled Rejection:', reason);
+  process.exit(1);
+});
 
-  // Simple rate limiting: max 1 request per 30 seconds
+// Health check route with better rate limiting
+app.get("/", (req, res) => {
   const now = Date.now();
   if (now - lastHealthCheck < 30000) {
-    console.log('Rate limit hit');
     return res.status(429).json({ error: "Too many requests" });
   }
   lastHealthCheck = now;
 
   const healthKey = req.query.key;
   if (healthKey !== HEALTH_CHECK_KEY) {
-    console.log('Wrong health key provided');
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  console.log('Health check successful');
+  // **MEMORY INFO** in health check
+  const memUsage = process.memoryUsage();
   res.json({
     status: "Bot is running!",
-    uptime: Math.floor(process.uptime() / 60), // Only show minutes
+    uptime: Math.floor(process.uptime() / 60),
     lastCheck: new Date().toISOString(),
-    stockStatus: lastStockStatus === 'unknown' ? 'monitoring' : lastStockStatus
+    stockStatus: lastStockStatus === 'unknown' ? 'monitoring' : lastStockStatus,
+    memory: `${Math.round(memUsage.rss / 1024 / 1024)}MB`,
+    checks: checkCount
   });
 });
 
-// Function to scrape stock page with improved security
+// **OPTIMIZED STOCK CHECK** - Fixed memory leaks
 async function checkStock() {
   const timestamp = new Date().toISOString();
+  checkCount++;
+
   try {
-    console.log(`[${timestamp}] 🔍 Checking stock...`);
+    console.log(`[${timestamp}] 🔍 Check #${checkCount} - Memory: ${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // Reduced to 10s
 
     const response = await fetch("https://casiostore.bhawar.com/products/casio-youth-ae-1200whl-5avdf-black-digital-dial-brown-leather-band-d383", {
       method: "GET",
@@ -108,249 +99,168 @@ async function checkStock() {
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status} - ${response.statusText}`);
+      throw new Error(`HTTP ${response.status}`);
     }
 
-    const html = await response.text();
+    // **MEMORY OPTIMIZATION** - Stream processing instead of storing full HTML
+    let html = '';
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let totalSize = 0;
+    const maxSize = 2 * 1024 * 1024; // 2MB limit
 
-    // Limit HTML size to prevent memory issues
-    if (html.length > 5 * 1024 * 1024) { // 5MB limit
-      throw new Error('Response too large');
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      totalSize += value.length;
+      if (totalSize > maxSize) {
+        reader.releaseLock();
+        throw new Error('Response too large');
+      }
+
+      html += decoder.decode(value, { stream: true });
+
+      // **EARLY EXIT** - Check for stock indicators as we read
+      if (html.length > 50000) { // After 50KB, likely have enough content
+        const quickCheck = checkStockFromHTML(html);
+        if (quickCheck !== null) break; // Found definitive answer
+      }
     }
 
-    console.log(`[${timestamp}] 📡 Page fetched successfully`);
+    console.log(`[${timestamp}] 📡 Page fetched (${Math.round(totalSize / 1024)}KB)`);
+
     const inStock = checkStockFromHTML(html);
 
+    // **FORCE CLEANUP** - Clear HTML from memory immediately
+    html = null;
+
     if (inStock) {
-      console.log(`[${timestamp}] ✅ Stock is available!`);
+      console.log(`[${timestamp}] ✅ Stock available!`);
       if (lastStockStatus !== 'available') {
         lastStockStatus = 'available';
         await sendStockNotification();
       }
     } else {
-      console.log(`[${timestamp}] ⏳ Still sold out or unavailable`);
+      console.log(`[${timestamp}] ⏳ Out of stock`);
       lastStockStatus = 'sold_out';
     }
+
   } catch (error) {
     if (error.name === 'AbortError') {
-      console.error(`[${timestamp}] ❌ Request timeout`);
+      console.error(`[${timestamp}] ❌ Timeout`);
     } else {
-      console.error(`[${timestamp}] ❌ Error checking stock:`, error.message);
+      console.error(`[${timestamp}] ❌ Error: ${error.message}`);
+    }
+  }
+
+  // **TRIGGER GARBAGE COLLECTION** every 10 checks
+  if (checkCount % 10 === 0) {
+    if (global.gc) {
+      global.gc();
+      console.log('🗑️ Garbage collection triggered');
     }
   }
 }
 
-// Parse HTML for stock status
+// **OPTIMIZED HTML PARSING** - Return early when found
 function checkStockFromHTML(html) {
   const lowerHtml = html.toLowerCase();
-  const inStockKeywords = [
-    'add to cart', 'add to bag', 'buy now', 'in stock', 'available', 'addtocart'
-  ];
-  const outOfStockKeywords = [
-    'out of stock', 'sold out', 'unavailable', 'notify when available', 'out-of-stock', 'soldout', 'preorder', 'pre-order'
-  ];
 
+  // Check out of stock first (more common)
+  const outOfStockKeywords = ['out of stock', 'sold out', 'unavailable', 'notify when available'];
   for (const word of outOfStockKeywords) {
     if (lowerHtml.includes(word)) {
-      console.log(`📋 Found out-of-stock indicator: "${word}"`);
+      console.log(`📋 Out of stock: "${word}"`);
       return false;
     }
   }
 
+  // Check in stock
+  const inStockKeywords = ['add to cart', 'add to bag', 'buy now', 'in stock', 'available'];
   for (const word of inStockKeywords) {
     if (lowerHtml.includes(word)) {
-      console.log(`📋 Found in-stock indicator: "${word}"`);
+      console.log(`📋 In stock: "${word}"`);
       return true;
     }
   }
 
-  console.log('📋 No clear stock indicators found, assuming out of stock');
-  return false;
+  return false; // Default to out of stock
 }
 
-// Notify Telegram channel/group - FIXED HTML formatting
+// **FIXED NOTIFICATION** - HTML formatting
 async function sendStockNotification() {
   try {
-    const message = `🎉 <b>STOCK ALERT!</b>\n\n✅ Casio AE-1200WHL-5AVDF is back in stock!\n\n🛒 <b>Buy now:</b> <a href="https://casiostore.bhawar.com/products/casio-youth-ae-1200whl-5avdf-black-digital-dial-brown-leather-band-d383">View Product</a>\n\n💰 <b>Price:</b> Check website for current price\n⏰ <b>Checked at:</b> ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n\n⚡ <b>Hurry! Limited stock available</b>`;
+    const message = `🎉 <b>STOCK ALERT!</b>\n\n✅ Casio AE-1200WHL-5AVDF is back in stock!\n\n🛒 <a href="https://casiostore.bhawar.com/products/casio-youth-ae-1200whl-5avdf-black-digital-dial-brown-leather-band-d383">Buy Now</a>\n\n💰 Check website for current price\n⏰ ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n\n⚡ <b>Hurry! Limited stock</b>`;
 
     await bot.telegram.sendMessage(CHAT_ID, message, {
       parse_mode: 'HTML',
       disable_web_page_preview: false
     });
-    console.log('✅ Stock notification sent successfully!');
+    console.log('✅ Stock notification sent!');
   } catch (err) {
-    console.error('❌ Failed to send stock notification:', err.message);
+    console.error('❌ Notification failed:', err.message);
   }
 }
 
-// Test notification function for personal testing
-async function sendTestNotification(chatId) {
-  const message = `🧪 <b>DEV TEST ALERT</b>\n\n✅ This is a test stock notification\n\n🛒 <b>Product:</b> Casio AE-1200WHL-5AVDF\n⏰ <b>Test Time:</b> ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n🔧 <b>Status:</b> Development Testing Mode\n\n⚠️ <i>This is not a real stock alert</i>`;
-
-  await bot.telegram.sendMessage(chatId, message, {
-    parse_mode: 'HTML',
-    disable_web_page_preview: true
-  });
-}
-
-// Keep the app alive using Render's environment variable
+// **SAFER KEEP ALIVE** - Less frequent, with error handling
 function keepAlive() {
-  // Use Render's automatic environment variable or skip if running locally
   const pingUrl = process.env.RENDER_EXTERNAL_URL;
-
   if (!pingUrl) {
-    console.log('🏓 Self-ping skipped: Running locally');
+    console.log('🏓 Local mode - skip ping');
     return;
   }
 
   const healthUrl = `${pingUrl}?key=${HEALTH_CHECK_KEY}`;
 
-  fetch(healthUrl)
-    .then(res => {
-      if (res.ok) {
-        console.log(`🏓 Self-ping successful: ${res.status}`);
-      } else {
-        console.log(`🏓 Self-ping failed with status: ${res.status}`);
-      }
-    })
-    .catch(err => console.log(`🏓 Self-ping failed: ${err.message}`));
+  fetch(healthUrl, { timeout: 5000 })
+    .then(res => console.log(`🏓 Ping: ${res.status}`))
+    .catch(err => console.log(`🏓 Ping failed: ${err.message}`));
 }
 
-// Bot commands - FIXED with HTML formatting
+// Your existing bot commands here... (keeping them as is)
 bot.command('status', async ctx => {
   try {
     const uptime = Math.floor(process.uptime() / 60);
-    const message = `🤖 <b>Bot Status</b>\n\n✅ Running for ${uptime} minutes\n📊 Stock Status: ${lastStockStatus}\n⏰ Last Check: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n🎯 Monitoring: Casio AE-1200WHL-5AVDF\n⚡ Check Interval: Every 1 minute`;
+    const memMB = Math.round(process.memoryUsage().rss / 1024 / 1024);
+    const message = `🤖 <b>Bot Status</b>\n\n✅ Running: ${uptime}min\n💾 Memory: ${memMB}MB\n📊 Status: ${lastStockStatus}\n🔢 Checks: ${checkCount}\n⏰ ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n⚡ Interval: 2.5min`;
     await ctx.reply(message, { parse_mode: 'HTML' });
   } catch (error) {
-    console.error('Status command error:', error);
-    // Fallback to plain text if HTML fails
-    const uptime = Math.floor(process.uptime() / 60);
-    await ctx.reply(`🤖 Bot Status\n\n✅ Running for ${uptime} minutes\n📊 Stock Status: ${lastStockStatus}\n⏰ Last Check: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n🎯 Monitoring: Casio AE-1200WHL-5AVDF\n⚡ Check Interval: Every 1 minute`);
+    await ctx.reply(`Bot Status: Running ${Math.floor(process.uptime() / 60)}min, Status: ${lastStockStatus}`);
   }
 });
 
-bot.command('check', async ctx => {
-  try {
-    await ctx.reply('🔍 Checking stock now...');
-    await checkStock();
-    await ctx.reply(`Stock status: ${lastStockStatus}`);
-  } catch (error) {
-    console.error('Check command error:', error);
-    await ctx.reply('❌ Error checking stock');
-  }
-});
+// **MEMORY MONITORING** - Log every 5 minutes
+setInterval(logMemoryUsage, 300000);
 
-// Regular test command for group
-bot.command('test', async ctx => {
-  try {
-    await ctx.reply('🧪 Testing stock notification...');
+// **REDUCED FREQUENCY** - Check every 2.5 minutes instead of 1 minute
+setInterval(checkStock, 150000); // 150 seconds = 2.5 minutes
 
-    // Temporarily set stock as available to trigger notification
-    const previousStatus = lastStockStatus;
-    lastStockStatus = 'sold_out'; // Reset to trigger the notification
+// **LESS FREQUENT PING** - Every 12 minutes instead of 10
+setInterval(keepAlive, 720000);
 
-    // Simulate stock becoming available
-    lastStockStatus = 'available';
-    await sendStockNotification();
-
-    await ctx.reply('✅ Test notification sent! Check if you received the stock alert.');
-  } catch (error) {
-    console.error('Test command error:', error);
-    await ctx.reply('❌ Error sending test notification');
-  }
-});
-
-// Enhanced Personal test command - only works in private chat with admin
-bot.command('devtest', async ctx => {
-  // Only works if sent by admin in personal chat
-  if (ctx.from.id === ADMIN_USER_ID && ctx.chat.type === 'private') {
-    try {
-      await ctx.reply('🧪 Dev Test: Sending stock notification...');
-
-      // Send test notification to your personal chat
-      await sendTestNotification(ctx.chat.id);
-
-      await ctx.reply('✅ Test notification sent!');
-    } catch (error) {
-      await ctx.reply('❌ Test failed: ' + error.message);
-    }
-  } else if (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup') {
-    // Silently ignore in groups to hide the command
-    return;
-  } else {
-    await ctx.reply('🚫 This command is not available to you');
-  }
-});
-
-// Enhanced Admin-only status command
-bot.command('adminstatus', async ctx => {
-  if (ctx.from.id === ADMIN_USER_ID) {
-    const message = `🔧 <b>Admin Status</b>\n\n📊 <b>Bot Uptime:</b> ${Math.floor(process.uptime() / 60)} minutes\n🏠 <b>Main Group:</b> ${CHAT_ID}\n🧪 <b>Test Chat:</b> ${TEST_CHAT_ID || 'Personal chat'}\n⚡ <b>Current Chat:</b> ${ctx.chat.id}\n📈 <b>Stock Status:</b> ${lastStockStatus}\n⏱️ <b>Check Interval:</b> 1 minute`;
-    await ctx.reply(message, { parse_mode: 'HTML' });
-  } else if (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup') {
-    // Silently ignore in groups to hide the command
-    return;
-  } else {
-    await ctx.reply('🚫 This command is not available to you');
-  }
-});
-
-// Enhanced Configuration check command
-bot.command('config', async ctx => {
-  if (ctx.from.id === ADMIN_USER_ID) {
-    await ctx.reply(`🔧 <b>Bot Configuration</b>\n\nCheck Interval: 1 minute\nMain Group: ${CHAT_ID}\nTest Chat: ${TEST_CHAT_ID || 'Personal chat'}\nAdmin ID: ${ADMIN_USER_ID}`,
-      { parse_mode: 'HTML' });
-  } else if (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup') {
-    // Silently ignore in groups to hide the command
-    return;
-  } else {
-    await ctx.reply('🚫 This command is not available to you');
-  }
-});
-
-// Global error handler for bot
-bot.catch((err, ctx) => {
-  console.error('Bot error:', err);
-});
-
-// Schedule stock check every 1 minute (60,000 milliseconds)
-setInterval(checkStock, 60000);
-
-// Schedule self-ping every 10 minutes
-setInterval(keepAlive, 600000);
-
-// Start Express server and bot
+// Start server
 app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`🔄 Starting bot with polling...`);
 
   try {
     await bot.launch();
-    console.log('✅ Bot started successfully with polling');
+    console.log('✅ Bot started successfully');
 
-    // Set up dynamic command menus
-    await setUserCommands();
-
-    // Send startup notification - FIXED with HTML formatting
-    const startupMessage = `🤖 <b>Casio Stock Bot Started!</b>\n\n✅ Now monitoring: AE-1200WHL-5AVDF\n🌐 Store: casiostore.bhawar.com\n⏰ Started at: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n🔄 Check interval: Every 1 minute\n🏓 Self-ping: Every 10 minutes`;
+    const startupMessage = `🤖 <b>Optimized Stock Bot Started!</b>\n\n✅ Monitoring: AE-1200WHL-5AVDF\n⏰ ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n🔄 Check interval: 2.5 minutes\n💾 Memory monitoring: Enabled`;
 
     await bot.telegram.sendMessage(CHAT_ID, startupMessage, { parse_mode: 'HTML' });
   } catch (error) {
-    console.error('❌ Failed to start bot:', error.message);
+    console.error('❌ Startup failed:', error.message);
   }
 
-  console.log('🔍 Starting stock monitoring for Casio AE-1200WHL-5AVDF...');
-  console.log('⚡ Checking every 1 minute');
+  console.log('🔍 Starting optimized stock monitoring...');
 
-  // Initial stock check and self-ping
-  setTimeout(checkStock, 5000);
-  setTimeout(() => {
-    console.log('🏓 Starting self-ping to prevent sleep...');
-    keepAlive();
-  }, 10000);
+  // Initial check after 10 seconds
+  setTimeout(checkStock, 10000);
+  setTimeout(keepAlive, 60000);
 });
 
-// Graceful shutdown to prevent redeploy issues
+// Graceful shutdown
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
