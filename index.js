@@ -35,11 +35,17 @@ let lastHealthCheck = 0;
 async function setUserCommands() {
   const publicCommands = [
     { command: 'status', description: 'Check bot status and uptime' },
-    { command: 'check', description: 'Manually check stock availability' },
-    { command: 'test', description: 'Send a test stock notification' }
+    { command: 'check', description: 'Manually check stock availability' }
   ];
 
   const adminCommands = [
+    { command: 'status', description: 'Check bot status and uptime' },
+    { command: 'check', description: 'Manually check stock availability' },
+    { command: 'test', description: 'Send a test stock notification' },
+    { command: 'devtest', description: 'Dev testing (admin only)' },
+    { command: 'adminstatus', description: 'Detailed admin status' },
+    { command: 'config', description: 'View bot configuration' }
+  ];
   const allCommands = [
     { command: 'status', description: 'Check bot status and uptime' },
     { command: 'check', description: 'Manually check stock availability' },
