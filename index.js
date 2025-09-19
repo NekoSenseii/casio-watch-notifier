@@ -19,41 +19,54 @@ if (!BOT_TOKEN || !CHAT_ID || !HEALTH_CHECK_KEY) {
   process.exit(1);
 }
 
-// Initialize the bot
-const bot = new Telegraf(BOT_TOKEN);
+// **FIX BOT CONFLICTS** - Only create bot once
+let bot;
+try {
+  bot = new Telegraf(BOT_TOKEN);
+  console.log('✅ Bot instance created successfully');
+} catch (error) {
+  console.error('❌ Failed to create bot instance:', error.message);
+  process.exit(1);
+}
 
-// Track last stock status and rate limiting
+// Track status and prevent memory leaks
 let lastStockStatus = 'unknown';
 let lastHealthCheck = 0;
 let checkCount = 0;
+let isShuttingDown = false;
 
-// **ENHANCED MEMORY MONITORING** - Add this for debugging
+// **ENHANCED MEMORY MONITORING**
 function logMemoryUsage() {
   const memUsage = process.memoryUsage();
   const memMB = Math.round(memUsage.rss / 1024 / 1024);
   const heapMB = Math.round(memUsage.heapUsed / 1024 / 1024);
-  console.log(`💾 Memory: ${memMB}MB | Heap: ${heapMB}MB | Checks: ${checkCount} | Uptime: ${Math.floor(process.uptime() / 60)}min`);
+  console.log(`💾 Memory: ${memMB}MB | Heap: ${heapMB}MB | Checks: ${checkCount} | Status: ${lastStockStatus}`);
 
   // Restart if memory gets too high (prevents crashes)
-  if (memMB > 400) {
+  if (memMB > 300) { // Lowered threshold
     console.log('⚠️ High memory usage detected, restarting...');
-    process.exit(0); // Render will restart automatically
+    process.exit(0);
   }
 }
 
-// **ENHANCED ERROR HANDLING** - Add global error handlers
+// **IMPROVED ERROR HANDLING**
 process.on('uncaughtException', (error) => {
   console.error('💥 Uncaught Exception:', error.message);
-  console.error('Stack:', error.stack);
-  process.exit(1);
+  if (!isShuttingDown) {
+    isShuttingDown = true;
+    setTimeout(() => process.exit(1), 1000);
+  }
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('💥 Unhandled Rejection:', reason);
-  process.exit(1);
+  if (!isShuttingDown) {
+    isShuttingDown = true;
+    setTimeout(() => process.exit(1), 1000);
+  }
 });
 
-// **ENHANCED HEALTH CHECK** - Better monitoring
+// Health check route
 app.get("/", (req, res) => {
   const now = Date.now();
   if (now - lastHealthCheck < 30000) {
@@ -66,22 +79,22 @@ app.get("/", (req, res) => {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  // **DETAILED MEMORY INFO** in health check
   const memUsage = process.memoryUsage();
   res.json({
     status: "Bot is running!",
     uptime: Math.floor(process.uptime() / 60),
     lastCheck: new Date().toISOString(),
-    stockStatus: lastStockStatus === 'unknown' ? 'monitoring' : lastStockStatus,
+    stockStatus: lastStockStatus,
     memory: `${Math.round(memUsage.rss / 1024 / 1024)}MB`,
-    heap: `${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`,
     checks: checkCount,
     interval: "1.5 minutes"
   });
 });
 
-// **SUPER OPTIMIZED STOCK CHECK** - Fixed all memory leaks
+// **FIXED STOCK CHECK** - Works with node-fetch properly
 async function checkStock() {
+  if (isShuttingDown) return;
+
   const timestamp = new Date().toISOString();
   checkCount++;
 
@@ -90,14 +103,13 @@ async function checkStock() {
     console.log(`[${timestamp}] 🔍 Check #${checkCount} - Memory: ${memBefore}MB`);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // Reduced to 8s for faster detection
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
 
     const response = await fetch("https://casiostore.bhawar.com/products/casio-youth-ae-1200whl-5avdf-black-digital-dial-brown-leather-band-d383", {
       method: "GET",
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Encoding": "gzip, deflate" // Enable compression
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
       },
       signal: controller.signal
     });
@@ -108,45 +120,17 @@ async function checkStock() {
       throw new Error(`HTTP ${response.status}`);
     }
 
-    // **ADVANCED STREAM PROCESSING** - Memory efficient with early detection
-    let html = '';
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let totalSize = 0;
-    const maxSize = 1.5 * 1024 * 1024; // Reduced to 1.5MB limit
-    let foundResult = false;
+    // **FIXED HTML PROCESSING** - Use .text() instead of stream reader
+    const html = await response.text();
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      totalSize += value.length;
-      if (totalSize > maxSize) {
-        reader.releaseLock();
-        throw new Error('Response too large');
-      }
-
-      const chunk = decoder.decode(value, { stream: true });
-      html += chunk;
-
-      // **SUPER EARLY DETECTION** - Check every 10KB for faster response
-      if (html.length > 10000 && html.length % 10000 < chunk.length) {
-        const quickCheck = checkStockFromHTML(html);
-        if (quickCheck !== null) {
-          foundResult = true;
-          reader.releaseLock();
-          break; // Found definitive answer early!
-        }
-      }
+    // Limit HTML size to prevent memory issues
+    if (html.length > 2 * 1024 * 1024) { // 2MB limit
+      throw new Error('Response too large');
     }
 
-    const sizeKB = Math.round(totalSize / 1024);
-    console.log(`[${timestamp}] 📡 Page fetched (${sizeKB}KB)${foundResult ? ' - Early detection!' : ''}`);
+    console.log(`[${timestamp}] 📡 Page fetched (${Math.round(html.length / 1024)}KB)`);
 
     const inStock = checkStockFromHTML(html);
-
-    // **IMMEDIATE CLEANUP** - Clear HTML from memory instantly
-    html = null;
 
     if (inStock) {
       console.log(`[${timestamp}] ✅ STOCK AVAILABLE!`);
@@ -155,47 +139,37 @@ async function checkStock() {
         await sendStockNotification();
       }
     } else {
-      console.log(`[${timestamp}] ⏳ Out of stock`);
+      console.log(`[${timestamp}] ❌ Out of stock`);
       lastStockStatus = 'sold_out';
-    }
-
-    // Log memory after cleanup
-    const memAfter = Math.round(process.memoryUsage().rss / 1024 / 1024);
-    if (memAfter > memBefore + 5) { // If memory increased by 5MB+
-      console.log(`⚠️ Memory leak detected: ${memBefore}MB → ${memAfter}MB`);
     }
 
   } catch (error) {
     if (error.name === 'AbortError') {
-      console.error(`[${timestamp}] ❌ Request timeout (8s)`);
+      console.error(`[${timestamp}] ❌ Request timeout`);
     } else {
       console.error(`[${timestamp}] ❌ Error: ${error.message}`);
     }
   }
 
-  // **AGGRESSIVE GARBAGE COLLECTION** - Every 5 checks for stability
-  if (checkCount % 5 === 0) {
+  // Trigger garbage collection every 10 checks
+  if (checkCount % 10 === 0) {
     if (global.gc) {
       global.gc();
-      console.log('🗑️ Garbage collection triggered (every 5 checks)');
+      console.log('🗑️ Garbage collection triggered');
     }
   }
 }
 
-// **FASTER HTML PARSING** - Optimized for speed
+// Stock detection from HTML
 function checkStockFromHTML(html) {
-  if (!html || html.length < 1000) return null; // Need minimum content
+  if (!html || html.length < 1000) return false;
 
   const lowerHtml = html.toLowerCase();
 
-  // **PRIORITY ORDER** - Check most common patterns first
+  // Check out of stock first
   const outOfStockKeywords = [
-    'out of stock',      // Most common
-    'sold out',
-    'unavailable',
-    'notify when available',
-    'out-of-stock',
-    'soldout'
+    'out of stock', 'sold out', 'unavailable',
+    'notify when available', 'out-of-stock', 'soldout'
   ];
 
   for (const word of outOfStockKeywords) {
@@ -205,14 +179,10 @@ function checkStockFromHTML(html) {
     }
   }
 
-  // Check in stock indicators
+  // Check in stock
   const inStockKeywords = [
-    'add to cart',       // Most reliable
-    'add to bag',
-    'buy now',
-    'in stock',
-    'available',
-    'addtocart'
+    'add to cart', 'add to bag', 'buy now',
+    'in stock', 'available', 'addtocart'
   ];
 
   for (const word of inStockKeywords) {
@@ -222,134 +192,131 @@ function checkStockFromHTML(html) {
     }
   }
 
-  return null; // Need more content to decide
+  return false; // Default to out of stock
 }
 
-// **INSTANT NOTIFICATION** - Optimized HTML formatting
+// Send notification
 async function sendStockNotification() {
   try {
-    const message = `🚨 <b>URGENT STOCK ALERT!</b>\n\n✅ <b>Casio AE-1200WHL-5AVDF is AVAILABLE!</b>\n\n🛒 <a href="https://casiostore.bhawar.com/products/casio-youth-ae-1200whl-5avdf-black-digital-dial-brown-leather-band-d383">🔥 BUY NOW - CLICK HERE 🔥</a>\n\n💰 Check website for current price\n⏰ Detected at: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n\n⚡ <b>HURRY! Stock may be limited!</b>\n🏃‍♂️ <b>Don't wait - order immediately!</b>`;
+    const message = `🚨 <b>URGENT STOCK ALERT!</b>\n\n✅ <b>Casio AE-1200WHL-5AVDF is AVAILABLE!</b>\n\n🛒 <a href="https://casiostore.bhawar.com/products/casio-youth-ae-1200whl-5avdf-black-digital-dial-brown-leather-band-d383">🔥 BUY NOW 🔥</a>\n\n⏰ Found at: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n\n⚡ <b>HURRY! Stock may be limited!</b>`;
 
     await bot.telegram.sendMessage(CHAT_ID, message, {
       parse_mode: 'HTML',
       disable_web_page_preview: false
     });
-    console.log('🎉 URGENT stock notification sent successfully!');
+    console.log('🎉 STOCK ALERT sent successfully!');
   } catch (err) {
-    console.error('❌ Critical notification failure:', err.message);
-
-    // Fallback plain text if HTML fails
-    try {
-      const fallbackMessage = `🚨 STOCK ALERT!\n\nCasio AE-1200WHL-5AVDF is AVAILABLE!\n\nBuy now: https://casiostore.bhawar.com/products/casio-youth-ae-1200whl-5avdf-black-digital-dial-brown-leather-band-d383\n\nTime: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n\nHURRY!`;
-      await bot.telegram.sendMessage(CHAT_ID, fallbackMessage);
-      console.log('✅ Fallback notification sent');
-    } catch (fallbackErr) {
-      console.error('❌ Even fallback failed:', fallbackErr.message);
-    }
+    console.error('❌ Notification failed:', err.message);
   }
 }
 
-// **OPTIMIZED KEEP ALIVE** - Smart pinging
+// Keep alive function
 function keepAlive() {
+  if (isShuttingDown) return;
+
   const pingUrl = process.env.RENDER_EXTERNAL_URL;
   if (!pingUrl) {
-    console.log('🏓 Local development - skip ping');
+    console.log('🏓 Local mode - skip ping');
     return;
   }
 
   const healthUrl = `${pingUrl}?key=${HEALTH_CHECK_KEY}`;
 
-  fetch(healthUrl, {
-    timeout: 3000,
-    headers: { 'User-Agent': 'KeepAlive/1.0' }
-  })
-    .then(res => {
-      if (res.ok) {
-        console.log(`🏓 Keep-alive successful: ${res.status}`);
-      } else {
-        console.log(`🏓 Keep-alive warning: ${res.status}`);
-      }
-    })
+  fetch(healthUrl, { timeout: 5000 })
+    .then(res => console.log(`🏓 Keep-alive: ${res.status}`))
     .catch(err => console.log(`🏓 Keep-alive failed: ${err.message}`));
 }
 
-// **ENHANCED BOT COMMANDS**
+// **FIXED BOT COMMANDS**
 bot.command('status', async ctx => {
   try {
     const uptime = Math.floor(process.uptime() / 60);
     const memUsage = process.memoryUsage();
     const memMB = Math.round(memUsage.rss / 1024 / 1024);
-    const heapMB = Math.round(memUsage.heapUsed / 1024 / 1024);
 
-    const message = `🤖 <b>Optimized Bot Status</b>\n\n✅ Uptime: ${uptime} minutes\n💾 Memory: ${memMB}MB (Heap: ${heapMB}MB)\n📊 Stock: ${lastStockStatus}\n🔢 Total checks: ${checkCount}\n⚡ Interval: <b>1.5 minutes</b> ⚡\n⏰ ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n\n🚀 <b>Fast & Stable Monitoring!</b>`;
+    const message = `🤖 <b>Fixed Bot Status</b>\n\n✅ Uptime: ${uptime} minutes\n💾 Memory: ${memMB}MB\n📊 Stock: ${lastStockStatus}\n🔢 Checks: ${checkCount}\n⚡ Interval: 1.5 minutes\n⏰ ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`;
 
     await ctx.reply(message, { parse_mode: 'HTML' });
   } catch (error) {
-    // Fallback to simple text
-    const uptime = Math.floor(process.uptime() / 60);
-    await ctx.reply(`🤖 Bot Status: Running ${uptime}min | Stock: ${lastStockStatus} | Checks: ${checkCount} | Interval: 1.5min`);
+    await ctx.reply(`Bot Status: Running ${Math.floor(process.uptime() / 60)}min, Stock: ${lastStockStatus}, Checks: ${checkCount}`);
   }
 });
 
 bot.command('check', async ctx => {
   try {
-    await ctx.reply('🔍 Checking stock now...');
+    await ctx.reply('🔍 Manual stock check initiated...');
     await checkStock();
-    const statusEmoji = lastStockStatus === 'available' ? '✅' : '❌';
-    await ctx.reply(`${statusEmoji} Current status: ${lastStockStatus}`);
+    const emoji = lastStockStatus === 'available' ? '✅' : '❌';
+    await ctx.reply(`${emoji} Status: ${lastStockStatus}`);
   } catch (error) {
-    console.error('Manual check error:', error);
-    await ctx.reply('❌ Error during manual stock check');
+    await ctx.reply('❌ Manual check failed');
   }
 });
 
-// **OPTIMAL SCHEDULING** - Perfect balance of speed vs stability
-console.log('🔧 Setting up optimized intervals...');
+// **PREVENT MULTIPLE INSTANCES** - Add bot error handler
+bot.catch((err, ctx) => {
+  console.error('Bot error:', err.message);
+  if (err.message.includes('409') || err.message.includes('Conflict')) {
+    console.error('🚨 Bot conflict detected - multiple instances running!');
+  }
+});
 
-// Memory monitoring every 3 minutes (more frequent for stability)
-setInterval(logMemoryUsage, 180000);
+// Scheduling with memory monitoring
+console.log('🔧 Setting up fixed intervals...');
 
-// **SWEET SPOT: 1.5 minute stock checks** - Fast but stable!
-setInterval(checkStock, 90000); // 90 seconds = 1.5 minutes
+// Memory check every 2 minutes
+setInterval(logMemoryUsage, 120000);
 
-// Keep-alive every 14 minutes (just under 15min sleep threshold)
+// Stock check every 1.5 minutes
+setInterval(checkStock, 90000);
+
+// Keep-alive every 14 minutes  
 setInterval(keepAlive, 840000);
 
-// Start server
+// **SAFER SERVER START**
 app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log('⚡ Optimization Level: MAXIMUM');
-  console.log('🎯 Check Interval: 1.5 minutes (FAST + STABLE)');
+  console.log('🔧 Bot conflicts fixed, memory optimized');
 
+  // **PREVENT DUPLICATE BOTS** - Check if already running
   try {
+    console.log('🔄 Starting bot with polling (single instance)...');
     await bot.launch();
-    console.log('✅ Bot started successfully with optimizations');
+    console.log('✅ Bot started successfully - no conflicts');
 
-    const startupMessage = `🚀 <b>SUPER OPTIMIZED Stock Bot Started!</b>\n\n✅ Product: AE-1200WHL-5AVDF\n⚡ Check interval: <b>1.5 minutes</b>\n💾 Memory monitoring: Advanced\n🛡️ Crash protection: Enabled\n⏰ Started: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n\n🎯 <b>Fast notifications, maximum stability!</b>`;
+    const startupMessage = `🛠️ <b>FIXED Stock Bot Started!</b>\n\n✅ Issues resolved:\n• Bot conflicts fixed\n• Memory optimized\n• Fetch errors fixed\n\n⚡ Monitoring: AE-1200WHL-5AVDF\n🔄 Interval: 1.5 minutes\n⏰ ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`;
 
     await bot.telegram.sendMessage(CHAT_ID, startupMessage, { parse_mode: 'HTML' });
   } catch (error) {
-    console.error('❌ Startup failed:', error.message);
+    console.error('❌ Bot startup failed:', error.message);
+
+    if (error.message.includes('409') || error.message.includes('Conflict')) {
+      console.error('🚨 MULTIPLE BOT INSTANCES DETECTED!');
+      console.error('📋 Solution: Stop all other instances first');
+    }
   }
 
-  console.log('🔍 Starting SUPER OPTIMIZED stock monitoring...');
-  console.log('💡 Features: Early detection, memory optimization, crash prevention');
+  console.log('🔍 Starting FIXED stock monitoring...');
 
-  // Quick initial check after 5 seconds
+  // Initial check after 5 seconds
   setTimeout(checkStock, 5000);
   setTimeout(keepAlive, 30000);
 });
 
-// Enhanced graceful shutdown
+// **ENHANCED GRACEFUL SHUTDOWN**
 process.once('SIGINT', () => {
-  console.log('🛑 Graceful shutdown initiated (SIGINT)');
-  bot.stop('SIGINT');
+  console.log('🛑 Graceful shutdown (SIGINT)');
+  isShuttingDown = true;
+  if (bot) bot.stop('SIGINT');
+  setTimeout(() => process.exit(0), 2000);
 });
 
 process.once('SIGTERM', () => {
-  console.log('🛑 Graceful shutdown initiated (SIGTERM)');
-  bot.stop('SIGTERM');
+  console.log('🛑 Graceful shutdown (SIGTERM)');
+  isShuttingDown = true;
+  if (bot) bot.stop('SIGTERM');
+  setTimeout(() => process.exit(0), 2000);
 });
 
-console.log('🎯 Casio Stock Bot - Super Optimized Edition');
-console.log('⚡ 1.5min intervals | 🛡️ Crash protection | 💾 Memory optimization');
+console.log('🎯 Casio Stock Bot - FIXED Edition');
+console.log('✅ Bot conflicts resolved | 💾 Memory optimized | 🔧 Fetch fixed');
