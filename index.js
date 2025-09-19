@@ -57,12 +57,13 @@ async function setUserCommands() {
 
   try {
     // Set public commands as default for all users
-    await bot.telegram.setMyCommands(publicCommands);
-    console.log('✅ Public commands set successfully');
+    await bot.telegram.setMyCommands(publicCommands, {
+      scope: { type: 'chat', chat_id: CHAT_ID }
+    });
 
     // Set admin commands for admin's private chat
     await bot.telegram.setMyCommands(adminCommands, {
-      scope: { type: 'chat', chat_id: ADMIN_USER_ID }
+      scope: { type: 'chat_admin', chat_id: ADMIN_USER_ID }
     });
     console.log('✅ Admin commands set successfully');
     // Set all commands globally - admin commands will be hidden by access control
