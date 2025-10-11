@@ -41,7 +41,7 @@ let lastHealthCheck = 0;
 function checkStockFromHTML(html) {
   try {
     const $ = cheerio.load(html);
-    const addToCartButton = $('.product-form__submit');
+    const addToCartButton = $('.product-form__submit, form[action*="/cart/add"] button[type="submit"], button[name="add"]');
 
     if (addToCartButton.length === 0) {
       console.log('📋 "Add to cart" button not found, assuming out of stock.');
