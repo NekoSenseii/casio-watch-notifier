@@ -1,21 +1,20 @@
-// Top of file: imports (works on Node >= 18, falls back to node-fetch)
+// Top of file: imports (modern Node supports global fetch)
 import express from "express";
 import { Telegraf } from "telegraf";
 import * as cheerio from "cheerio";
 
-let fetchFn = globalThis.fetch;
-if (!fetchFn) {
-  // dynamic import for compatibility in older Node versions
-  // (wrap in try/catch in case node-fetch isn't installed)
-  try {
-    // note: dynamic import returns module namespace
-    const nodeFetch = await import("node-fetch");
-    fetchFn = nodeFetch.default;
-  } catch (err) {
-    console.error("❌ fetch is not available and node-fetch could not be loaded:", err);
-    process.exit(1);
-  }
+// --- Fetch fallback: SAFE for Render (no top-level await) ---
+let fetchFn;
+
+if (typeof fetch !== "undefined") {
+  // Node 18+ (Render default is Node 16 unless changed)
+  fetchFn = fetch;
+} else {
+  // Older Node version → require node-fetch
+  const nodeFetch = await Promise.resolve().then(() => import("node-fetch"));
+  fetchFn = nodeFetch.default;
 }
+
 
 // --- CONFIGURATION & ENVIRONMENT VARIABLES ---
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
