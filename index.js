@@ -282,7 +282,7 @@ bot.command('adminstatus', adminOnly, async (ctx) => {
 bot.command('config', adminOnly, async (ctx) => {
   if (!ctx) return;
   const message = `⚙️ <b>Bot Configuration</b>\n\n` +
-    `⏱️ <b>Check Interval:</b> 5 seconds\n` + // <-- CHANGED
+    `⏱️ <b>Check Interval:</b> 10 seconds\n` + // <-- CHANGED
     `🏓 <b>Self-Ping Interval:</b> 10 minutes\n` +
     `👑 <b>Admin User ID:</b> <code>${ADMIN_USER_ID}</code>`;
   await ctx.replyWithHTML(message);
@@ -296,7 +296,7 @@ bot.catch((err, ctx) => {
 // --- SCHEDULING & SERVER START ---
 async function start() {
   // Schedule periodic tasks
-  setInterval(checkStock, 5000); // Check stock every 5 second <-- CHANGED
+  setInterval(checkStock, 10000); // Check stock every 10 second <-- CHANGED
   setInterval(keepAlive, 600000); // Self-ping every 10 minutes
 
   // Launch Express server
@@ -312,12 +312,12 @@ async function start() {
   await setUserCommands();
 
   // Send a startup notification
-  const startupMessage = `🤖 <b>Casio Stock Bot Started!</b>\n\n✅ Now monitoring stock.\n⏰ Started at: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n⏱️ Check interval: Every 5 second.`; // <-- CHANGED
+  const startupMessage = `🤖 <b>Casio Stock Bot Started!</b>\n\n✅ Now monitoring stock.\n⏰ Started at: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}\n⏱️ Check interval: Every 10 second.`; // <-- CHANGED
   await bot.telegram.sendMessage(CHAT_ID, startupMessage, { parse_mode: 'HTML' });
 
   // Initial checks after a short delay
   console.log('🔍 Performing initial stock check and self-ping...');
-  setTimeout(checkStock, 5000);
+  setTimeout(checkStock, 10000);
   setTimeout(keepAlive, 10000);
 }
 
